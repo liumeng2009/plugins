@@ -1,0 +1,34 @@
+<?xml version='1.0' encoding='utf-8'?>
+<plugin id="com.meng.plugin.pushservice" version="1.0.0"   xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
+    <name>plugins</name>
+    <description>
+        H5项目使用的后台推送服务
+    </description>
+    <author email="378338627@qq.com" href="">
+        心梦
+    </author>
+    <platform name="android">
+        <js-module src="www/progress_dialog.js" name="progrress_dialog">
+            <!--TODO  这里是在JS中调该插件的前缀-->
+            <merges target="window.pushservice" />
+        </js-module>
+        <config-file target="res/xml/config.xml" parent="/*">
+            <feature name="ProgressDialogPlugin">
+                <!--TODO 插件的完整类路径-->
+                <param name="android-package" value="com.meng.plugin.pushservice.ProgressDialogPlugin"/>
+            </feature>
+        </config-file>
+        <!--TODO Java 本地代码映射，由两部分组成，前面是在插件文件中的路径，就是要把这些文件放到哪个目录下 -->
+        <source-file src="platforms\android\src\com\meng\plugin\pushservice\ProgressDialogPlugin.java" target-dir="src/com/meng/plugin/pushservice"/>
+        <source-file src="platforms\android\src\com\meng\plugin\pushservice\ChatApplication.java" target-dir="src/com/meng/plugin/pushservice"/>
+        <source-file src="platforms\android\src\com\meng\plugin\pushservice\ChatService.java" target-dir="src/com/meng/plugin/pushservice"/>
+        <source-file src="platforms\android\src\com\meng\plugin\pushservice\Constants.java" target-dir="src/com/meng/plugin/pushservice"/>
+        <source-file src="platforms\android\src\com\meng\plugin\pushservice\DbTools.java" target-dir="src/com/meng/plugin/pushservice"/>
+        <source-file src="platforms\android\src\com\meng\plugin\pushservice\HttpUtil.java" target-dir="src/com/meng/plugin/pushservice"/>
+        <source-file src="platforms\android\src\com\meng\plugin\pushservice\netTools.java" target-dir="src/com/meng/plugin/pushservice"/>
+    </platform>
+    <platform name="ios">
+        <allow-intent href="itms:*" />
+        <allow-intent href="itms-apps:*" />
+    </platform>
+</plugin>
