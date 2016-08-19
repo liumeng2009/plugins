@@ -25,37 +25,22 @@ public class ChatService extends Service {
     NotificationManager nm;
 
     private Socket mSocket;
-    private Boolean isConnected = true;
     SQLiteDatabase db;
-
-
-    public ChatService() {
-
-    }
+    String username;
+    String _id;
 
     @Override
     public void onCreate(){
         super.onCreate();
         Log.d(TAG, "onCreate() executed");
+        db=SQLiteDatabase.openOrCreateDatabase(this.getFilesDir().toString()+"/sfDB.db3",null);
         ChatApplication app = (ChatApplication) getApplication();
         mSocket = app.getSocket();
         mSocket.on(Socket.EVENT_CONNECT,onConnect);
+        mSocket.on(Socket.EVENT_RECONNECT,onReConnect);
         mSocket.on(Socket.EVENT_DISCONNECT,onDisconnect);
         mSocket.on(Socket.EVENT_CONNECT_ERROR, onConnectError);
         mSocket.on(Socket.EVENT_CONNECT_TIMEOUT, onConnectError);
-
-        //从sqlite里面找到当前激活的用户，然后监听他的接收事件
-        db=SQLiteDatabase.openOrCreateDatabase(this.getFilesDir().toString()+"/sfDB.db3",null);
-        Cursor cursor=db.query("users",new String[]{"_id","name"},"active=?",new String[]{"1"},null,null,null);
-        while(cursor.moveToNext()){
-            String _id=cursor.getString(0);
-            mSocket.on("to"+_id,onReceiveMessage);
-        }
-        //mSocket.on("new message", onNewMessage);
-        //mSocket.on("user joined", onUserJoined);
-        //mSocket.on("user left", onUserLeft);
-        //mSocket.on("typing", onTyping);
-        //mSocket.on("stop typing", onStopTyping);
         mSocket.connect();
     }
 
@@ -63,8 +48,8 @@ public class ChatService extends Service {
     public int onStartCommand(Intent intent,int flags,int startId){
         Log.d(TAG, "onStartCommand() executed");
 
-        String username=intent.getStringExtra("username");
-        String _id=intent.getStringExtra("_id");
+        username=intent.getStringExtra("username");
+        _id=intent.getStringExtra("_id");
         JSONObject json=new JSONObject();
         try{
             json.put("name",username);
@@ -74,7 +59,9 @@ public class ChatService extends Service {
         catch (JSONException e){
             e.printStackTrace();
         }
-        return super.onStartCommand(intent, flags, startId);
+        //mSocket.on("new message", onReceiveMessage);
+        //return super.onStartCommand(intent, flags, startId);
+        return START_STICKY;
     }
 
     @Override
@@ -86,12 +73,8 @@ public class ChatService extends Service {
         mSocket.off(Socket.EVENT_DISCONNECT, onDisconnect);
         mSocket.off(Socket.EVENT_CONNECT_ERROR, onConnectError);
         mSocket.off(Socket.EVENT_CONNECT_TIMEOUT, onConnectError);
-        db=SQLiteDatabase.openOrCreateDatabase(this.getFilesDir().toString()+"/sfDB.db3",null);
-        Cursor cursor=db.query("users",new String[]{"_id","name"},"active=?",new String[]{"1"},null,null,null);
-        while(cursor.moveToNext()){
-            String _id=cursor.getString(1);
-            mSocket.off("to"+_id,onReceiveMessage);
-        }
+        mSocket.off("to"+_id,onReceiveMessage);
+
     }
 
     @Override
@@ -102,23 +85,42 @@ public class ChatService extends Service {
     private Emitter.Listener onConnect = new Emitter.Listener() {
         @Override
         public void call(Object... args) {
+            Log.v(TAG,"连接了");
+            //连接成功，监听
+            //登录
+            JSONObject json=new JSONObject();
+            try{
+                json.put("name",username);
+                json.put("_id",_id);
+                mSocket.emit("login", json);
+            }
+            catch (JSONException e){
+                e.printStackTrace();
+            }
+            //发送事件
+            mSocket.on("to"+_id,onReceiveMessage);
 
+        }
+    };
+
+    private Emitter.Listener onReConnect = new Emitter.Listener() {
+        @Override
+        public void call(Object... args) {
+            Log.v(TAG,"重新连接了");
         }
     };
 
     private Emitter.Listener onDisconnect = new Emitter.Listener() {
         @Override
         public void call(Object... args) {
-
-            isConnected = false;
-            //Toast.makeText(ChatService.this,R.string.disconnect, Toast.LENGTH_LONG).show();
+            Log.v(TAG,"断开连接了");
         }
     };
 
     private Emitter.Listener onConnectError = new Emitter.Listener() {
         @Override
         public void call(Object... args) {
-                    //Toast.makeText(ChatService.this,R.string.error_connect, Toast.LENGTH_LONG).show();
+            //Toast.makeText(ChatService.this,R.string.error_connect, Toast.LENGTH_LONG).show();
         }
     };
 
@@ -135,7 +137,7 @@ public class ChatService extends Service {
                 boolean isExistActor=DbTools.isExistTable(db,"actor");
                 //建立chats表
                 if(!isExistChats){
-                    db.execSQL("create table chats(_id varchar(255) primary key,from varchar(255),to varchar(255),content varchar(4000),createAt date,saw int)");
+                    db.execSQL("create table chats(_id varchar(255) primary key,fromuser varchar(255),touser varchar(255),content varchar(4000),createAt date,saw int)");
                 }
                 //建立actor表
                 if(!isExistChats){
@@ -155,16 +157,17 @@ public class ChatService extends Service {
                     //信息不存在，就存入sql
                     ContentValues cvChats = new ContentValues();
                     cvChats.put("_id", messageJson.getString("_id"));
-                    cvChats.put("from", messageJson.getString("from"));
-                    cvChats.put("to", messageJson.getString("to"));
+                    cvChats.put("fromuser", messageJson.getString("from"));
+                    cvChats.put("touser", messageJson.getString("to"));
                     cvChats.put("content", messageJson.getString("content"));
-                    cvChats.put("createAt", messageJson.getString("createAt"));
+                    JSONObject meta=messageJson.getJSONObject("meta");
+                    cvChats.put("createAt", meta.getString("createAt"));
                     cvChats.put("saw", 0);
+                    db.insert("chats",null,cvChats);
                 }
-
                 //发送通知
                 nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
-                Intent intent=new Intent(ChatService.this,MainActivity.class);
+                Intent intent=new Intent(ChatService.this,com.ionicframework.testtpl199249.MainActivity.class);
                 PendingIntent pi=PendingIntent.getActivity(ChatService.this,0,intent,0);
                 final Notification.Builder builder = new Notification.Builder(ChatService.this);
                 try {
@@ -180,6 +183,7 @@ public class ChatService extends Service {
                     e.printStackTrace();
                 }
                 nm.notify(NOTIFICATION_ID,builder.getNotification());
+
 
             } catch (Exception e) {
                 e.printStackTrace();
